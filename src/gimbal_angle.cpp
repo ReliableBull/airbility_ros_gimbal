@@ -1,5 +1,6 @@
 #include <ros/ros.h>
 #include <geometry_msgs/Vector3.h>
+#include "std_msgs/Int32.h"
 #include <stdint.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -10,6 +11,8 @@
 #include <iomanip>
 
 #define BUF_SIZE 47
+
+int missionMode = -1;
 
 // 구조체 정의
 typedef struct {
@@ -25,6 +28,13 @@ typedef struct {
     int16_t yawStatorRotorAngle; 
 } T_GimbalGetAnglesExtReq;
 
+ // Mission flag callBack
+void missionCallback(const std_msgs::Int32::ConstPtr& msg)
+{
+    missionMode = msg->data;
+    ROS_INFO("Received Mission Mode: %d", msg->data);
+}
+
 // 16비트 부호 있는 정수 변환
 int16_t hexToSignedDecimal(uint16_t hexValue) {
     return static_cast<int16_t>(hexValue);
@@ -35,9 +45,14 @@ int main(int argc, char** argv) {
     ros::NodeHandle nh;
 
     ros::Publisher imu_pub = nh.advertise<geometry_msgs::Vector3>("encoder_angles", 1);
+     
+    // Mission flag subscriber
+    ros::Subscriber sub = nh.subscribe("/missionTogimbal", 10, missionCallback);
+
 
     int fd;
     char command[7] = {0x55, 0xaa, 0xdc, 0x04, 0x10, 0x00, 0x14};
+    uint8_t pitchDownCommand[20] = {0x55, 0xAA, 0xDC, 0x11, 0x30, 0x0B, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2A};
     char buf[BUF_SIZE] = {0x00};
 
     // 시리얼 포트 설정
@@ -62,7 +77,10 @@ int main(int argc, char** argv) {
     ros::Rate loop_rate(30); // 10 Hz
     // write(fd, command, 7);
     while (1) {
-        // write(fd, command, 7);
+        
+        // Arrive destination
+        if(missionMode == 3)
+            write(fd, pitchDownCommand, 20);
         
         int res = read(fd, buf, BUF_SIZE);
         // ROS_INFO("%d\n",res);
